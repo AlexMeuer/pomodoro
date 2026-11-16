@@ -1,0 +1,8 @@
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+
+disallowed-methods = [
+  { path = "jiff::Timestamp::now", reason = "Timestamp generation must be implicitly opted-into by overriding clippy (to serve as a guardrail to keep the timer module pure)." },
+]
