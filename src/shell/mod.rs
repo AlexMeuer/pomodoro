@@ -1,8 +1,12 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
+use thiserror::Error;
 
-use crate::shell::commands::start::{StartTimerOptions, start_timer};
+use crate::shell::commands::{
+    start::{StartTimerError, StartTimerOptions, start_timer},
+    status::{TimerStatusError, TimerStatusOptions, print_timer_status},
+};
 
 mod commands;
 
@@ -32,6 +36,15 @@ enum Commands {
         /// The length of the timer, in seconds.
         duration: u64,
     },
+    Status,
+}
+
+#[derive(Error, Debug)]
+enum CommandError {
+    #[error("Error starting timer | {0}")]
+    Start(#[from] StartTimerError),
+    #[error("Error reading timer status | {0}")]
+    Status(#[from] TimerStatusError),
 }
 
 pub fn run() -> ExitCode {
@@ -55,18 +68,22 @@ pub fn run() -> ExitCode {
     //     _ => println!("Don't be crazy"),
     // }
 
-    match cli.command {
-        Commands::Start { duration } => {
-            match start_timer(StartTimerOptions {
-                duration_secs: duration,
-                state: None,
-            }) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(e) => {
-                    eprintln!("Error starting timer: {e}");
-                    ExitCode::FAILURE
-                }
-            }
+    let result: Result<(), CommandError> = match cli.command {
+        Commands::Start { duration } => start_timer(StartTimerOptions {
+            duration_secs: duration,
+            state: cli.state,
+        })
+        .map_err(Into::into),
+        Commands::Status => {
+            print_timer_status(TimerStatusOptions { state: cli.state }).map_err(Into::into)
+        }
+    };
+
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
         }
     }
 }

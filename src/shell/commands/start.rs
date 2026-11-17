@@ -37,12 +37,11 @@ pub fn start_timer(opts: StartTimerOptions) -> Result<(), StartTimerError> {
         },
     };
 
+    // We are in the shell, so it's legal to call SystemTime::now
+    #[allow(clippy::disallowed_methods)]
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| {
-            eprintln!("WARN: failed to get current time: {e}");
-            StartTimerError::SystemClockRead(e)
-        })?
+        .map_err(StartTimerError::SystemClockRead)?
         .as_secs();
 
     let (state, outcome) = timer::start(state, opts.duration_secs, now);

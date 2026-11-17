@@ -2,7 +2,8 @@ use std::{num::ParseIntError, str::FromStr};
 
 use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Default)]
+/// The state of a timer.
+#[derive(Debug, PartialEq, Eq, Default, Clone, Copy)]
 pub enum State {
     #[default]
     Idle,
@@ -13,6 +14,30 @@ pub enum State {
     Paused {
         remaining_secs: u64,
     },
+}
+
+impl State {
+    #[must_use]
+    pub const fn recalculate(self, now: u64) -> Self {
+        match self {
+            Self::Running { ends_at } if now > ends_at => Self::Idle,
+            Self::Running { ends_at } => Self::Running { ends_at },
+            Self::Paused { remaining_secs: 0 } => Self::Idle,
+            Self::Idle | Self::Paused { .. } => self,
+        }
+    }
+    pub fn pretty_print(&self, now: u64) -> String {
+        match self.recalculate(now) {
+            Self::Idle => "Idle".to_string(),
+            Self::Running { ends_at } => {
+                let remaining_secs = ends_at.saturating_sub(now);
+                format!("Running (ends in {remaining_secs} seconds)")
+            }
+            Self::Paused { remaining_secs } => {
+                format!("Paused ({remaining_secs} seconds remaining)")
+            }
+        }
+    }
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -84,7 +109,7 @@ mod tests {
     #[case(State::Idle, "idle")]
     #[case(State::Running { ends_at: 10 }, "running 10")]
     #[case(State::Paused { remaining_secs: 5 }, "paused 5")]
-    fn test_state_to_string(#[case] state: State, #[case] expected: String) {
+    fn converts_to_string(#[case] state: State, #[case] expected: String) {
         assert_eq!(String::from(state), expected);
     }
 
@@ -94,7 +119,7 @@ mod tests {
     #[case("running 10", Ok(State::Running { ends_at: 10 }))]
     #[case("paused 5", Ok(State::Paused { remaining_secs: 5 }))]
     #[case("foobar 5", Err(ParseStateError::InvalidStatus("foobar".to_string())))]
-    fn test_string_to_state(#[case] input: &str, #[case] expected: Result<State, ParseStateError>) {
+    fn parses_from_string(#[case] input: &str, #[case] expected: Result<State, ParseStateError>) {
         assert_eq!(input.parse::<State>(), expected);
     }
 }
