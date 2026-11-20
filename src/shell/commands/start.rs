@@ -6,7 +6,7 @@ use crate::timer::{self, state::State};
 pub struct StartTimerOptions {
     pub duration_secs: u64,
     /// Path to the state file
-    pub state: Option<PathBuf>,
+    pub state_path: PathBuf,
 }
 
 #[derive(Error, Debug)]
@@ -20,9 +20,7 @@ pub enum StartTimerError {
 }
 
 pub fn start_timer(opts: StartTimerOptions) -> Result<(), StartTimerError> {
-    let path = opts.state.unwrap_or_else(|| PathBuf::from(r"./state"));
-
-    let result = fs::read_to_string(&path).map(|str| {
+    let result = fs::read_to_string(&opts.state_path).map(|str| {
         str.parse::<State>().unwrap_or_else(|e| {
             eprintln!("WARN: bad state file: {e}");
             State::default()
@@ -46,7 +44,7 @@ pub fn start_timer(opts: StartTimerOptions) -> Result<(), StartTimerError> {
 
     let (state, outcome) = timer::start(state, opts.duration_secs, now);
 
-    fs::write(path, String::from(state)).map_err(StartTimerError::WriteState)?;
+    fs::write(opts.state_path, String::from(state)).map_err(StartTimerError::WriteState)?;
 
     match outcome {
         timer::StartTimerOutcome::Started => println!("Timer started"),

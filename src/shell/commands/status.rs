@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::timer::state::{ParseStateError, State};
 
 pub struct TimerStatusOptions {
-    pub state: Option<PathBuf>,
+    pub state_path: PathBuf,
 }
 
 #[derive(Error, Debug)]
@@ -18,9 +18,7 @@ pub enum TimerStatusError {
 }
 
 pub fn print_timer_status(opts: TimerStatusOptions) -> Result<(), TimerStatusError> {
-    let path = opts.state.unwrap_or_else(|| PathBuf::from(r"./state"));
-
-    let result = fs::read_to_string(&path);
+    let result = fs::read_to_string(opts.state_path);
 
     let state = match result {
         Ok(content) => content
@@ -39,7 +37,7 @@ pub fn print_timer_status(opts: TimerStatusOptions) -> Result<(), TimerStatusErr
         .map_err(TimerStatusError::SystemClockRead)?
         .as_secs();
 
-    dbg!(state.pretty_print(now));
+    println!("{}", state.pretty_print(now));
 
     Ok(())
 }

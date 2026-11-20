@@ -14,7 +14,7 @@ pub enum StartTimerOutcome {
 #[allow(clippy::needless_pass_by_value)]
 pub const fn start(state: State, duration_secs: u64, now: u64) -> (State, StartTimerOutcome) {
     match state {
-        State::Running { ends_at } if now > ends_at => start(State::Idle, duration_secs, now),
+        State::Running { ends_at } if now >= ends_at => start(State::Idle, duration_secs, now),
         running @ State::Running { .. } => (running, StartTimerOutcome::AlreadyRunning),
         State::Idle => (
             State::Running {

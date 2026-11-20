@@ -20,7 +20,7 @@ impl State {
     #[must_use]
     pub const fn recalculate(self, now: u64) -> Self {
         match self {
-            Self::Running { ends_at } if now > ends_at => Self::Idle,
+            Self::Running { ends_at } if now >= ends_at => Self::Idle,
             Self::Running { ends_at } => Self::Running { ends_at },
             Self::Paused { remaining_secs: 0 } => Self::Idle,
             Self::Idle | Self::Paused { .. } => self,
@@ -29,14 +29,18 @@ impl State {
     pub fn pretty_print(&self, now: u64) -> String {
         match self.recalculate(now) {
             Self::Idle => "Idle".to_string(),
-            Self::Running { ends_at } => {
-                let remaining_secs = ends_at.saturating_sub(now);
-                format!("Running (ends in {remaining_secs} seconds)")
-            }
+            Self::Running { ends_at } => format_seconds(ends_at.saturating_sub(now)),
             Self::Paused { remaining_secs } => {
-                format!("Paused ({remaining_secs} seconds remaining)")
+                format!("Paused ({})", format_seconds(remaining_secs))
             }
         }
+    }
+}
+fn format_seconds(s: u64) -> String {
+    if s >= 60 {
+        format!("{}m", s / 60)
+    } else {
+        format!("{s}s")
     }
 }
 
