@@ -36,9 +36,11 @@ impl State {
         }
     }
 }
+
 fn format_seconds(s: u64) -> String {
-    if s >= 60 {
-        format!("{}m", s / 60)
+    const SECONDS_PER_MINUTE: u64 = 60;
+    if s > SECONDS_PER_MINUTE {
+        format!("{}m", s.div_ceil(SECONDS_PER_MINUTE))
     } else {
         format!("{s}s")
     }
@@ -125,5 +127,16 @@ mod tests {
     #[case("foobar 5", Err(ParseStateError::InvalidStatus("foobar".to_string())))]
     fn parses_from_string(#[case] input: &str, #[case] expected: Result<State, ParseStateError>) {
         assert_eq!(input.parse::<State>(), expected);
+    }
+
+    #[rstest]
+    #[case(0, "0s")]
+    #[case(60, "60s")]
+    #[case(61, "2m")]
+    #[case(120, "2m")]
+    #[case(121, "3m")]
+    #[case(1500, "25m")]
+    fn format_seconds_returns_expected(#[case] seconds: u64, #[case] expected: String) {
+        assert_eq!(format_seconds(seconds), expected);
     }
 }
