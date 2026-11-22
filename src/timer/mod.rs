@@ -1,6 +1,8 @@
 use crate::timer::state::State;
 
+mod duration;
 pub mod state;
+pub use duration::Duration;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum StartTimerOutcome {
@@ -12,20 +14,22 @@ pub enum StartTimerOutcome {
 /// Starts a timer if it is not already running.
 /// Consumes the given state and returns a new state.
 #[allow(clippy::needless_pass_by_value)]
-pub const fn start(state: State, duration_secs: u64, now: u64) -> (State, StartTimerOutcome) {
+pub fn start(state: State, duration: Duration, now: u64) -> (State, StartTimerOutcome) {
     match state {
-        State::Running { ends_at } if now >= ends_at => start(State::Idle, duration_secs, now),
+        State::Running { ends_at } if now >= ends_at => start(State::Idle, duration, now),
         running @ State::Running { .. } => (running, StartTimerOutcome::AlreadyRunning),
         State::Idle => (
             State::Running {
-                ends_at: now.saturating_add(duration_secs),
+                ends_at: now.saturating_add(duration.into()),
             },
             StartTimerOutcome::Started,
         ),
-        State::Paused { remaining_secs: 0 } => start(State::Idle, duration_secs, now),
-        State::Paused { remaining_secs } => (
+        State::Paused {
+            remaining: Duration::ZERO,
+        } => start(State::Idle, duration, now),
+        State::Paused { remaining } => (
             State::Running {
-                ends_at: now.saturating_add(remaining_secs),
+                ends_at: now.saturating_add(remaining.into()),
             },
             StartTimerOutcome::Resumed,
         ),
@@ -48,16 +52,16 @@ mod tests {
     #[case(S::Running { ends_at: NOW - 1},          20,         S::Running { ends_at: NOW + 20},    O::Started)]
     #[case(S::Running { ends_at: NOW},              20,         S::Running { ends_at: NOW + 20 },   O::Started)]
     #[case(S::Running { ends_at: NOW + 1},          20,         S::Running { ends_at: NOW + 1},     O::AlreadyRunning)]
-    #[case(S::Paused { remaining_secs: 0},          20,         S::Running { ends_at: NOW + 20 },   O::Started)]
-    #[case(S::Paused { remaining_secs: 30},         20,         S::Running { ends_at: NOW + 30 },   O::Resumed)]
-    #[case(S::Paused { remaining_secs: u64::MAX},   20,         S::Running { ends_at: u64::MAX },   O::Resumed)]
+    #[case(S::Paused { remaining: Duration::secs(0)},          20,         S::Running { ends_at: NOW + 20 },   O::Started)]
+    #[case(S::Paused { remaining: Duration::secs(30)},         20,         S::Running { ends_at: NOW + 30 },   O::Resumed)]
+    #[case(S::Paused { remaining: Duration::secs(u64::MAX)},   20,         S::Running { ends_at: u64::MAX },   O::Resumed)]
     fn starting_returns_expected(
         #[case] initial: State,
         #[case] duration_secs: u64,
         #[case] expected_state: State,
         #[case] expected_outcome: StartTimerOutcome,
     ) {
-        let (new_state, outcome) = start(initial, duration_secs, NOW);
+        let (new_state, outcome) = start(initial, Duration::secs(duration_secs), NOW);
         assert_eq!(new_state, expected_state);
         assert_eq!(outcome, expected_outcome);
     }

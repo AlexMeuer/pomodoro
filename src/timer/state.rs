@@ -2,6 +2,8 @@ use std::{num::ParseIntError, str::FromStr};
 
 use thiserror::Error;
 
+use crate::timer::Duration;
+
 /// The state of a timer.
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy)]
 pub enum State {
@@ -12,7 +14,7 @@ pub enum State {
         ends_at: u64,
     },
     Paused {
-        remaining_secs: u64,
+        remaining: Duration,
     },
 }
 
@@ -22,27 +24,20 @@ impl State {
         match self {
             Self::Running { ends_at } if now >= ends_at => Self::Idle,
             Self::Running { ends_at } => Self::Running { ends_at },
-            Self::Paused { remaining_secs: 0 } => Self::Idle,
+            Self::Paused {
+                remaining: Duration::ZERO,
+            } => Self::Idle,
             Self::Idle | Self::Paused { .. } => self,
         }
     }
     pub fn pretty_print(&self, now: u64) -> String {
         match self.recalculate(now) {
             Self::Idle => "Idle".to_string(),
-            Self::Running { ends_at } => format_seconds(ends_at.saturating_sub(now)),
-            Self::Paused { remaining_secs } => {
-                format!("Paused ({})", format_seconds(remaining_secs))
+            Self::Running { ends_at } => format!("{}", Duration::secs(ends_at.saturating_sub(now))),
+            Self::Paused { remaining } => {
+                format!("Paused ({remaining})")
             }
         }
-    }
-}
-
-fn format_seconds(s: u64) -> String {
-    const SECONDS_PER_MINUTE: u64 = 60;
-    if s > SECONDS_PER_MINUTE {
-        format!("{}m", s.div_ceil(SECONDS_PER_MINUTE))
-    } else {
-        format!("{s}s")
     }
 }
 
@@ -88,7 +83,9 @@ impl FromStr for State {
                             .map_err(ParseStateError::PausedButMalformedRemainingSeconds)
                     },
                 )?;
-                Ok(Self::Paused { remaining_secs })
+                Ok(Self::Paused {
+                    remaining: Duration::secs(remaining_secs),
+                })
             }
             Some(unknown) => Err(ParseStateError::InvalidStatus(unknown.to_string())),
         }
@@ -100,7 +97,7 @@ impl From<State> for String {
         match val {
             State::Idle => "idle".to_string(),
             State::Running { ends_at } => format!("running {ends_at}"),
-            State::Paused { remaining_secs } => format!("paused {remaining_secs}"),
+            State::Paused { remaining } => format!("paused {remaining}"),
         }
     }
 }
@@ -114,7 +111,7 @@ mod tests {
     #[rstest]
     #[case(State::Idle, "idle")]
     #[case(State::Running { ends_at: 10 }, "running 10")]
-    #[case(State::Paused { remaining_secs: 5 }, "paused 5")]
+    #[case(State::Paused { remaining: Duration::secs(5) }, "paused 5s")]
     fn converts_to_string(#[case] state: State, #[case] expected: String) {
         assert_eq!(String::from(state), expected);
     }
@@ -123,20 +120,20 @@ mod tests {
     #[case("", Err(ParseStateError::EmptyInput))]
     #[case("idle", Ok(State::Idle))]
     #[case("running 10", Ok(State::Running { ends_at: 10 }))]
-    #[case("paused 5", Ok(State::Paused { remaining_secs: 5 }))]
+    #[case("paused 5", Ok(State::Paused { remaining: Duration::secs(5) }))]
     #[case("foobar 5", Err(ParseStateError::InvalidStatus("foobar".to_string())))]
     fn parses_from_string(#[case] input: &str, #[case] expected: Result<State, ParseStateError>) {
         assert_eq!(input.parse::<State>(), expected);
     }
 
     #[rstest]
-    #[case(0, "0s")]
-    #[case(60, "60s")]
-    #[case(61, "2m")]
-    #[case(120, "2m")]
-    #[case(121, "3m")]
-    #[case(1500, "25m")]
-    fn format_seconds_returns_expected(#[case] seconds: u64, #[case] expected: String) {
-        assert_eq!(format_seconds(seconds), expected);
+    #[case(Duration::secs(0), "0s")]
+    #[case(Duration::secs(60), "60s")]
+    #[case(Duration::secs(61), "2m")]
+    #[case(Duration::secs(120), "2m")]
+    #[case(Duration::secs(121), "3m")]
+    #[case(Duration::secs(1500), "25m")]
+    fn formatting_returns_expected(#[case] duration: Duration, #[case] expected: String) {
+        assert_eq!(format!("{duration}"), expected);
     }
 }

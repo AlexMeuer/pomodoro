@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub struct StartTimerOptions {
-    pub duration_secs: u64,
+    pub duration: timer::Duration,
     /// Path to the state file
     pub state_path: PathBuf,
 }
@@ -31,7 +31,7 @@ pub fn start_timer(opts: StartTimerOptions) -> Result<(), StartTimerError> {
     let now = read_clock()?;
 
     // Decide
-    let (state, outcome) = timer::start(state, opts.duration_secs, now);
+    let (state, outcome) = timer::start(state, opts.duration, now);
 
     // Act
     fs::write(opts.state_path, String::from(state)).map_err(StartTimerError::WriteState)?;
