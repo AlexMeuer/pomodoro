@@ -62,26 +62,59 @@ pub const fn pause(state: State, now: u64) -> (State, PauseTimerOutcome) {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum StopTimerOutcome {
+    Stopped,
+    NotRunning,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Persist {
+    Persist(State),
+    Delete,
+}
+
+/// Stops a timer if it is running.
+/// Consumes the given state and returns a decision about whether
+/// to write new state or delete the stored state.
+#[allow(clippy::needless_pass_by_value)]
+#[must_use]
+pub const fn stop(state: State, delete: bool, now: u64) -> (Persist, StopTimerOutcome) {
+    let outcome = match state {
+        State::Idle => StopTimerOutcome::NotRunning,
+        State::Running { ends_at } if now >= ends_at => StopTimerOutcome::Stopped,
+        State::Running { .. } | State::Paused { .. } => StopTimerOutcome::Stopped,
+    };
+
+    if delete {
+        (Persist::Delete, outcome)
+    } else {
+        (Persist::Persist(State::Idle), outcome)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use PauseTimerOutcome as PTO;
     use StartTimerOutcome as STO;
     use State as S;
+    use StopTimerOutcome as StopTO;
     use rstest::rstest;
+
     const NOW: u64 = 1_794_000_000;
 
     #[rstest]
-    //      intitial state                      duration_secs       expected_state              expected_outcome
-    #[case(S::Idle,                                 0,          S::Running { ends_at: NOW },        STO::Started)]
-    #[case(S::Idle,                                 20,         S::Running { ends_at: NOW + 20},    STO::Started)]
-    #[case(S::Idle,                                 u64::MAX,   S::Running { ends_at: u64::MAX },   STO::Started)]
-    #[case(S::Running { ends_at: NOW - 1},          20,         S::Running { ends_at: NOW + 20},    STO::Started)]
-    #[case(S::Running { ends_at: NOW},              20,         S::Running { ends_at: NOW + 20 },   STO::Started)]
-    #[case(S::Running { ends_at: NOW + 1},          20,         S::Running { ends_at: NOW + 1},     STO::AlreadyRunning)]
-    #[case(S::Paused { remaining: Duration::secs(0)},          20,         S::Running { ends_at: NOW + 20 },   STO::Started)]
-    #[case(S::Paused { remaining: Duration::secs(30)},         20,         S::Running { ends_at: NOW + 30 },   STO::Resumed)]
-    #[case(S::Paused { remaining: Duration::secs(u64::MAX)},   20,         S::Running { ends_at: u64::MAX },   STO::Resumed)]
+    //     initial                                            duration_secs  expected_state                    expected_outcome
+    #[case(S::Idle,                                           0,             S::Running { ends_at: NOW },      STO::Started)]
+    #[case(S::Idle,                                           20,            S::Running { ends_at: NOW + 20 }, STO::Started)]
+    #[case(S::Idle,                                           u64::MAX,      S::Running { ends_at: u64::MAX }, STO::Started)]
+    #[case(S::Running { ends_at: NOW - 1 },                   20,            S::Running { ends_at: NOW + 20 }, STO::Started)]
+    #[case(S::Running { ends_at: NOW },                       20,            S::Running { ends_at: NOW + 20 }, STO::Started)]
+    #[case(S::Running { ends_at: NOW + 1 },                   20,            S::Running { ends_at: NOW + 1 },  STO::AlreadyRunning)]
+    #[case(S::Paused { remaining: Duration::secs(0) },        20,            S::Running { ends_at: NOW + 20 }, STO::Started)]
+    #[case(S::Paused { remaining: Duration::secs(30) },       20,            S::Running { ends_at: NOW + 30 }, STO::Resumed)]
+    #[case(S::Paused { remaining: Duration::secs(u64::MAX) }, 20,            S::Running { ends_at: u64::MAX }, STO::Resumed)]
     fn starting_returns_expected(
         #[case] initial: State,
         #[case] duration_secs: u64,
@@ -95,6 +128,10 @@ mod tests {
 
     #[rstest]
     #[case(S::Idle, S::Idle, PTO::NotRunning)]
+    #[case(S::Running { ends_at: NOW - 1 },            S::Idle,                                    PTO::NotRunning)]
+    #[case(S::Running { ends_at: NOW },                S::Idle,                                    PTO::NotRunning)]
+    #[case(S::Running { ends_at: NOW + 1 },            S::Paused { remaining: Duration::secs(1) }, PTO::Paused)]
+    #[case(S::Paused { remaining: Duration::secs(1) }, S::Paused { remaining: Duration::secs(1) }, PTO::AlreadyPaused)]
     fn pausing_returns_expected(
         #[case] initial: State,
         #[case] expected_state: State,
@@ -102,6 +139,23 @@ mod tests {
     ) {
         let (new_state, outcome) = pause(initial, NOW);
         assert_eq!(new_state, expected_state);
+        assert_eq!(outcome, expected_outcome);
+    }
+
+    #[rstest]
+    #[case(S::Idle, false, Persist::Persist(S::Idle), StopTO::NotRunning)]
+    #[case(S::Idle, true, Persist::Delete, StopTO::NotRunning)]
+    #[case(S::Running { ends_at: NOW + 1 }, false,  Persist::Persist(S::Idle), StopTO::Stopped)]
+    #[case(S::Running { ends_at: NOW + 1 }, true,   Persist::Delete,           StopTO::Stopped)]
+    #[case(S::Running { ends_at: NOW - 1 }, false,  Persist::Persist(S::Idle), StopTO::Stopped)]
+    fn stopping_returns_expected(
+        #[case] initial: State,
+        #[case] delete: bool,
+        #[case] expected_persist: Persist,
+        #[case] expected_outcome: StopTimerOutcome,
+    ) {
+        let (persist, outcome) = stop(initial, delete, NOW);
+        assert_eq!(persist, expected_persist);
         assert_eq!(outcome, expected_outcome);
     }
 }

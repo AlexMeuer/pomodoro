@@ -6,13 +6,15 @@ use crate::{
         clock::read_clock,
         read_state::{LoadStateError, load_state},
     },
-    timer,
+    timer::{self, state::State},
 };
 
 pub struct StartTimerOptions {
     pub duration: timer::Duration,
     /// Path to the state file
     pub state_path: PathBuf,
+    /// Force the timer to start regardless of current state
+    pub force: bool,
 }
 
 #[derive(Error, Debug)]
@@ -27,7 +29,11 @@ pub enum StartTimerError {
 
 pub fn start_timer(opts: StartTimerOptions) -> Result<(), StartTimerError> {
     // Gather
-    let state = load_state(&opts.state_path)?;
+    let state = if opts.force {
+        State::Idle
+    } else {
+        load_state(&opts.state_path)?
+    };
     let now = read_clock()?;
 
     // Decide
