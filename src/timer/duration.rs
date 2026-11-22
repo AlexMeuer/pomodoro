@@ -15,6 +15,10 @@ impl Duration {
     pub const fn secs(seconds: u64) -> Self {
         Self(seconds)
     }
+
+    pub const fn as_secs(self) -> u64 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for Duration {

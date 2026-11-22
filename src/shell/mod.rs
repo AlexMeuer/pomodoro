@@ -5,6 +5,7 @@ use thiserror::Error;
 
 use crate::{
     shell::commands::{
+        pause::{PauseTimerError, PauseTimerOptions, pause_timer},
         start::{StartTimerError, StartTimerOptions, start_timer},
         status::{TimerStatusError, TimerStatusOptions, print_timer_status},
     },
@@ -34,16 +35,19 @@ enum Commands {
         duration: timer::Duration,
     },
     Status,
+    Pause,
 }
 
 #[derive(Error, Debug)]
 pub enum CommandError {
-    #[error("Failed to place state file | {0}")]
+    #[error("Failed to place state file: {0}")]
     PlaceStateFile(std::io::Error),
-    #[error("Error starting timer | {0}")]
+    #[error("Error starting timer: {0}")]
     Start(#[from] StartTimerError),
-    #[error("Error reading timer status | {0}")]
+    #[error("Error reading timer status: {0}")]
     Status(#[from] TimerStatusError),
+    #[error("Error pausing timer: {0}")]
+    Pause(#[from] PauseTimerError),
 }
 
 pub fn run() -> Result<(), CommandError> {
@@ -67,5 +71,6 @@ pub fn run() -> Result<(), CommandError> {
         Commands::Status => {
             print_timer_status(&TimerStatusOptions { state_path }).map_err(Into::into)
         }
+        Commands::Pause => pause_timer(PauseTimerOptions { state_path }).map_err(Into::into),
     }
 }

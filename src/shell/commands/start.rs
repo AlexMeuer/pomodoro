@@ -39,10 +39,10 @@ pub fn start_timer(opts: StartTimerOptions) -> Result<(), StartTimerError> {
     match outcome {
         timer::StartTimerOutcome::Started => println!("Timer started"),
         timer::StartTimerOutcome::Resumed => {
-            println!("Existing paused timer resume | new timer not started");
+            println!("Existing paused timer resumed: new timer not started");
         }
         timer::StartTimerOutcome::AlreadyRunning => {
-            println!("Timer already running | no action taken");
+            println!("Timer already running: no action taken");
         }
     }
 

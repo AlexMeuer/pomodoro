@@ -97,7 +97,7 @@ impl From<State> for String {
         match val {
             State::Idle => "idle".to_string(),
             State::Running { ends_at } => format!("running {ends_at}"),
-            State::Paused { remaining } => format!("paused {remaining}"),
+            State::Paused { remaining } => format!("paused {}", remaining.as_secs()),
         }
     }
 }
@@ -111,7 +111,7 @@ mod tests {
     #[rstest]
     #[case(State::Idle, "idle")]
     #[case(State::Running { ends_at: 10 }, "running 10")]
-    #[case(State::Paused { remaining: Duration::secs(5) }, "paused 5s")]
+    #[case(State::Paused { remaining: Duration::secs(5) }, "paused 5")]
     fn converts_to_string(#[case] state: State, #[case] expected: String) {
         assert_eq!(String::from(state), expected);
     }
