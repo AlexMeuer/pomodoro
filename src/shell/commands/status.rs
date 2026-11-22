@@ -1,7 +1,10 @@
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 use thiserror::Error;
 
-use crate::timer::state::{ParseStateError, State};
+use crate::shell::commands::{
+    clock::read_clock,
+    read_state::{LoadStateError, load_state},
+};
 
 pub struct TimerStatusOptions {
     pub state_path: PathBuf,
@@ -9,35 +12,22 @@ pub struct TimerStatusOptions {
 
 #[derive(Error, Debug)]
 pub enum TimerStatusError {
-    #[error("failed to read state file: {0}")]
-    ReadState(std::io::Error),
-    #[error("malformed state file: {0}")]
-    MalformedState(#[from] ParseStateError),
+    #[error("failed to load state: {0}")]
+    LoadState(#[from] LoadStateError),
     #[error("failed to get current time: {0}")]
-    SystemClockRead(std::time::SystemTimeError),
+    ReadClock(#[from] std::time::SystemTimeError),
 }
 
-pub fn print_timer_status(opts: TimerStatusOptions) -> Result<(), TimerStatusError> {
-    let result = fs::read_to_string(opts.state_path);
+pub fn print_timer_status(opts: &TimerStatusOptions) -> Result<(), TimerStatusError> {
+    // Gather
+    let state = load_state(&opts.state_path)?;
+    let now = read_clock()?;
 
-    let state = match result {
-        Ok(content) => content
-            .parse::<State>()
-            .map_err(TimerStatusError::MalformedState),
-        Err(e) => match e.kind() {
-            std::io::ErrorKind::NotFound => Ok(State::default()),
-            _ => Err(TimerStatusError::ReadState(e)),
-        },
-    }?;
+    // Decide
+    let pretty = state.pretty_print(now);
 
-    // We are in the shell, so it's legal to call SystemTime::now
-    #[allow(clippy::disallowed_methods)]
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(TimerStatusError::SystemClockRead)?
-        .as_secs();
-
-    println!("{}", state.pretty_print(now));
+    // Act
+    println!("{pretty}");
 
     Ok(())
 }

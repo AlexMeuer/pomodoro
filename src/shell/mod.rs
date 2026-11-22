@@ -86,7 +86,7 @@ pub fn run() -> Result<(), CommandError> {
         })
         .map_err(Into::into),
         Commands::Status => {
-            print_timer_status(TimerStatusOptions { state_path }).map_err(Into::into)
+            print_timer_status(&TimerStatusOptions { state_path }).map_err(Into::into)
         }
     }
 }

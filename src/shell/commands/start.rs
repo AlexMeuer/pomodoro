@@ -1,7 +1,13 @@
 use std::{fs, path::PathBuf};
 use thiserror::Error;
 
-use crate::timer::{self, state::State};
+use crate::{
+    shell::commands::{
+        clock::read_clock,
+        read_state::{LoadStateError, load_state},
+    },
+    timer,
+};
 
 pub struct StartTimerOptions {
     pub duration_secs: u64,
@@ -11,39 +17,23 @@ pub struct StartTimerOptions {
 
 #[derive(Error, Debug)]
 pub enum StartTimerError {
-    #[error("failed to read state file: {0}")]
-    ReadState(std::io::Error),
+    #[error("failed to load state: {0}")]
+    LoadState(#[from] LoadStateError),
     #[error("failed to get current time: {0}")]
-    SystemClockRead(std::time::SystemTimeError),
+    ReadClock(#[from] std::time::SystemTimeError),
     #[error("failed to write state file: {0}")]
     WriteState(std::io::Error),
 }
 
 pub fn start_timer(opts: StartTimerOptions) -> Result<(), StartTimerError> {
-    let result = fs::read_to_string(&opts.state_path).map(|str| {
-        str.parse::<State>().unwrap_or_else(|e| {
-            eprintln!("WARN: bad state file: {e}");
-            State::default()
-        })
-    });
+    // Gather
+    let state = load_state(&opts.state_path)?;
+    let now = read_clock()?;
 
-    let state = match result {
-        Ok(state) => state,
-        Err(e) => match e.kind() {
-            std::io::ErrorKind::NotFound => State::default(),
-            _ => return Err(StartTimerError::ReadState(e)),
-        },
-    };
-
-    // We are in the shell, so it's legal to call SystemTime::now
-    #[allow(clippy::disallowed_methods)]
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(StartTimerError::SystemClockRead)?
-        .as_secs();
-
+    // Decide
     let (state, outcome) = timer::start(state, opts.duration_secs, now);
 
+    // Act
     fs::write(opts.state_path, String::from(state)).map_err(StartTimerError::WriteState)?;
 
     match outcome {
